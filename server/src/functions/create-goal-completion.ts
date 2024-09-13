@@ -9,8 +9,8 @@ interface CreateGoalCompletionRequest {
 }
 
 export async function createGoalCompletion({ goalId }: CreateGoalCompletionRequest) {
-    const firstDayOfWeek = dayjs().startOf('week').toDate()
-    const lastDayOfWeek = dayjs().endOf('week').toDate()
+    const firstDayOfWeek = dayjs().startOf('week').toDate();
+    const lastDayOfWeek = dayjs().endOf('week').toDate();
 
     const goalCompletionCounts = db.$with('goal_completion_counts').as(
         db.select({
@@ -18,42 +18,42 @@ export async function createGoalCompletion({ goalId }: CreateGoalCompletionReque
             completionCount: count(goalCompletions.id).as('completionCount'),
         })
             .from(goalCompletions)
-            .where(and(
-                gte(goalCompletions.completedAt, firstDayOfWeek),
-                lte(goalCompletions.completedAt, lastDayOfWeek),
-                eq(goalCompletions.goalId, goalId)
-            ))
+            .where(
+                and(
+                    gte(goalCompletions.createdAt, firstDayOfWeek),
+                    lte(goalCompletions.createdAt, lastDayOfWeek),
+                    eq(goalCompletions.goalId, goalId)
+                )
+            )
             .groupBy(goalCompletions.goalId)
-    )
+    );
 
     const result = await db
         .with(goalCompletionCounts)
         .select({
             desiredWeeklyFrequency: goals.desiredWeeklyFrequency,
-            completionCount: sql/*sql*/`
-                COALESCE(${goalCompletionCounts.completionCount}, 0)
-            `.mapWith(Number),
+            completionCount: sql /*sql*/`COALESCE(${goalCompletionCounts.completionCount}, 0)`
+                .mapWith(Number),
         })
         .from(goals)
         .leftJoin(goalCompletionCounts, eq(goalCompletionCounts.goalId, goals.id))
         .where(eq(goals.id, goalId))
-        .limit(1)
+        .limit(1);
 
-    const { completionCount, desiredWeeklyFrequency } = result[0]
+    const { completionCount, desiredWeeklyFrequency } = result[0];
 
     if (completionCount >= desiredWeeklyFrequency) {
         throw new Error('Meta já foi concluída para essa semana');
     }
 
-    const insertResult = await db.insert(goalCompletions)
-        .values({
-            goalId
-        })
-        .returning()
+    const insertResult = await db
+        .insert(goalCompletions)
+        .values({ goalId })
+        .returning();
 
-    const goalCompletion = insertResult[0]
+    const goalCompletion = insertResult[0];
 
     return {
         goalCompletion,
-    }
+    };
 }
